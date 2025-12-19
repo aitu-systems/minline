@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minline"
+version = "0.2.1"
+description = "Menu-inline framework for Telegram bots"
+authors = [{ name = "Bakirullit" }]
+requires-python = ">=3.10"
+dependencies = ["aiogram>=3.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
