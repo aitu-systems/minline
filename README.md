@@ -152,5 +152,3 @@ It just refuses to pretend callbacks are a routing system.
 This project is under active refactoring.
 APIs are stabilizing.
 Expect clarity, not backward compatibility.
-
-```
