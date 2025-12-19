@@ -1,6 +1,3 @@
-## `README.md`
-
-```md
 # Minline
 
 Minline is a lightweight navigation-first framework built on top of **aiogram 3.x** for creating Telegram bots with **structured menus**, **relative routing**, and **stateful navigation**.
