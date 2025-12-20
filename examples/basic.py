@@ -1,6 +1,6 @@
 from minline import MinlineApp, Menu, Button
 
-app = MinlineApp("BOT-TOKEN")
+app = MinlineApp("8124229474:AAEXksI8rnuczR-6V50NDUX5bkV65YLnP_s")
 
 # Root menu
 @app.route("/")

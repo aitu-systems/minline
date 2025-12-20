@@ -3,6 +3,14 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup
 
+from minline.session import SessionManager, JsonSessionManager, MessageManager, SessionKeys
+
+from minline.app.commands.context import CommandContext
+from minline.app.commands.registry import CommandRegistry
+
+from aiogram.filters import CommandStart
+from aiogram.types import Message
+
 from minline.routing import (
     RouteResolver,
     NavigationStack,
@@ -10,45 +18,45 @@ from minline.routing import (
 )
 
 class MinlineApp:
-    def __init__(self, token: str):
+    def __init__(self, token: str, session_manager: SessionManager = None):
         self.bot = Bot(token)
         self.dp = Dispatcher()
         self.routes = RouteResolver()
         self.nav = NavigationStack()
         self.nav_protocol = NavigationProtocol()
+        self.commands = CommandRegistry()
+        self.session: SessionManager = session_manager or JsonSessionManager("sessions.json")
+        self.messages = MessageManager(self.session)
         self.is_404 = {}
 
         @self.dp.message(CommandStart())
-        async def start(msg: types.Message):
-            await self._render(msg.chat.id, "/")
+        async def _start(msg: Message):
+            await self._render(msg, "/", source="start")
+
+        @self.dp.message()
+        async def my_custom_handler(msg: Message):
+            path = "/custom"
+            await self._render(msg, path)
 
         @self.dp.callback_query()
         async def callback(cb: types.CallbackQuery):
             data = cb.data
-            chat_id = cb.message.chat.id
 
             if data.startswith(self.nav_protocol.BACK):
-                if self.is_404.get(chat_id):
-                    path = self.nav.current(chat_id)
-                    await self._render(chat_id, path, cb, push=False)
-                else:
-                    path = self.nav.back(chat_id)
-                    await self._render(chat_id, path, cb, push=False)
+                path = self.nav.current(cb.message.chat.id) if self.is_404.get(cb.message.chat.id) else self.nav.back(cb.message.chat.id)
+                await self._render(cb, path, push=False)
                 return
-
 
             if data.startswith(self.nav_protocol.ROUTE):
                 raw = data.replace(self.nav_protocol.ROUTE, "")
-                if raw.startswith("/"):
-                    path = raw
-                else:
-                    base = self.nav.current(chat_id).rstrip("/")
-                    path = f"{base}/{raw}"
-
-                await self._render(chat_id, path, cb, push=True)
+                base = self.nav.current(cb.message.chat.id).rstrip("/")
+                path = raw if raw.startswith("/") else f"{base}/{raw}"
+                await self._render(cb, path, push=True)
                 return
 
             await cb.answer("Action executed")
+
+
 
 
     def route(self, path: str):
@@ -57,7 +65,20 @@ class MinlineApp:
             return func
         return decorator
 
-    async def _render(self, chat_id: int, path: str, cb=None, push=True):
+    def command(self, name: str):
+        def decorator(func):
+            self.commands.register(name, func)
+            return func
+        return decorator
+
+    async def _render(self, msg_obj: types.Message | types.CallbackQuery, path: str, push=True, source=None):
+        if isinstance(msg_obj, types.Message):
+            chat_id = msg_obj.chat.id
+        elif isinstance(msg_obj, types.CallbackQuery):
+            chat_id = msg_obj.message.chat.id
+        else:
+            raise TypeError("msg_obj must be Message or CallbackQuery")
+
         handler = self.routes.resolve(path)
 
         if handler is None:
@@ -76,14 +97,34 @@ class MinlineApp:
 
         markup = menu.render(show_back=show_back)
 
-        if cb:
+        last_id = self.messages.get(chat_id)
+
+        if isinstance(msg_obj, types.Message):
             try:
-                await cb.message.edit_text(menu.menu_id, reply_markup=markup)
+                await msg_obj.delete()
             except Exception:
                 pass
-            await cb.answer()
-        else:
-            await self.bot.send_message(chat_id, menu.menu_id, reply_markup=markup)
+        elif isinstance(msg_obj, types.CallbackQuery):
+            try:
+                await msg_obj.message.delete()
+            except Exception:
+                pass
+
+        if last_id:
+            try:
+                await self.bot.edit_message_text(chat_id=chat_id, message_id=last_id,
+                                                text=menu.menu_id, reply_markup=markup)
+                self.messages.set(chat_id, last_id)
+                return
+            except Exception:
+                try:
+                    await self.bot.delete_message(chat_id, last_id)
+                except Exception:
+                    pass
+
+        msg = await self.bot.send_message(chat_id, menu.menu_id, reply_markup=markup)
+        self.messages.set(chat_id, msg.message_id)
+
 
 
     def current_path(self, user_id) -> str:
