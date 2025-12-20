@@ -3,10 +3,11 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup
 
-from minline.routing.resolver import RouteResolver
-from minline.routing.stack import NavigationStack
-
-from .protocol import NavigationProtocol
+from minline.routing import (
+    RouteResolver,
+    NavigationStack,
+    NavigationProtocol,
+)
 
 class MinlineApp:
     def __init__(self, token: str):
@@ -84,5 +85,15 @@ class MinlineApp:
         else:
             await self.bot.send_message(chat_id, menu.menu_id, reply_markup=markup)
 
+
+    def current_path(self, user_id) -> str:
+        return self.nav.get(user_id)
+
+    def can_go_back(self, user_id) -> bool:
+        return self.current_path(user_id) != "/"
+
+    def parent_path(self, path: str) -> str:
+        return parent_path(path)
+        
     def run(self):
         asyncio.run(self.dp.start_polling(self.bot))
